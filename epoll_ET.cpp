@@ -17,7 +17,6 @@
 
 
 
-//////////////////////////////////////将文件描述符设置成非阻塞////////////////////////////
 int setnonblocking(int fd)
 {
 	int old_option = fcntl(fd, F_GETFL);
@@ -25,23 +24,20 @@ int setnonblocking(int fd)
 	fcntl(fd, F_SETFL, new_option);
 	return old_option;
 }
-//////////////////////////////////////将fd中的读事件注册到epoll内核事件表中///////////////
+
 void addfd(int epollfd, int fd, int enable_et)
 {
 	epoll_event event;
-	//相当于event初始化
 	event.events = EPOLLIN;
 	event.data.fd = fd;
-	//判断是否使用et模式
 	if (enable_et)
 	{
 		event.events |= EPOLLET;
 	}
 	epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
-	//将文件描述符置成非阻塞
 	setnonblocking(fd);
 }
-//////////////////////////////////////LT模式//////////////////////////////////////////////
+
 void lt(epoll_event* events, int num, int epollfd, int listenfd)
 {
 	char buff[BUFFSIZE];
@@ -54,12 +50,10 @@ void lt(epoll_event* events, int num, int epollfd, int listenfd)
 			struct sockaddr_in cli;
 			unsigned int len = sizeof(cli);
 			int connfd = accept(listenfd, (struct sockaddr* )&cli, &len);
-			//对connfd禁用ET模式 //1表示启用ET模式，0表示禁用ET模式
 			addfd(epollfd, connfd, 0);
 		}
 		else if(events[i].events & EPOLLIN)
 		{
-			//只要socket读缓存中还有未读出的数据，这段代码就被触发
 			printf("event trigger once\n");
 			memset(buff, 0, BUFFSIZE);
 			int ret = recv(sockfd, buff, BUFFSIZE, 0);
@@ -77,7 +71,7 @@ void lt(epoll_event* events, int num, int epollfd, int listenfd)
 		}
 	}
 }
-//////////////////////////////////////ET模式工作流程//////////////////////////////////////
+
 void et(epoll_event* events, int num, int epollfd, int listenfd)
 {
 	char buff[BUFFSIZE];
@@ -101,11 +95,6 @@ void et(epoll_event* events, int num, int epollfd, int listenfd)
 				int ret = recv(sockfd, buff, BUFFSIZE, 0);
 				if (ret < 0)
 				{
-					/*
-					*  对于非阻塞I/O，下面条件成立，数据已经全部读取完毕。
-					*  此后epoll能再次触发sockfd上的EPOLLIN事件，以驱动下
-					*  一次读操作
-					*/
 					if ((errno == EAGAIN) || (errno == EWOULDBLOCK))
 					{
 						printf("read later\n");
@@ -165,7 +154,6 @@ int main(int argc, char* argv[], char* environ[])
 	
 	while (1)
 	{
-		//-1代表永久阻塞，直到有一个事件就绪
 		int ret = epoll_wait(epollfd, events, MAXEVENTNUM, -1);
 		if (ret < 0)
 		{
@@ -173,7 +161,6 @@ int main(int argc, char* argv[], char* environ[])
 			break;
 		}
 		lt(events, ret, epollfd, listenfd);
-		//et(events, ret, epollfd, listenfd);
 		
 	}
 		
